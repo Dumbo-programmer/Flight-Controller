@@ -1,97 +1,114 @@
-#include <Wire.h>
-#include <MPU6050.h>
-#include <PID_v1.h>
-
-// MPU6050 object
-MPU6050 mpu;
-
-// PID control variables
-double roll, pitch, yaw;
-double roll_setpoint = 0.0;
-double pitch_setpoint = 0.0;
-double yaw_setpoint = 0.0;
-double roll_input, pitch_input, yaw_input;
-double roll_output, pitch_output, yaw_output;
-
-// PID controllers
-PID roll_pid(&roll_input, &roll_output, &roll_setpoint, 1.0, 0.0, 0.0, DIRECT);
-PID pitch_pid(&pitch_input, &pitch_output, &pitch_setpoint, 1.0, 0.0, 0.0, DIRECT);
-PID yaw_pid(&yaw_input, &yaw_output, &yaw_setpoint, 1.0, 0.0, 0.0, DIRECT);
-
-// Motor control variables
-const int motor1Pin = 9;
-const int motor2Pin = 10;
-const int motor3Pin = 11;
-const int motor4Pin = 3;
-
-// Define PWM limits
-const int PWM_MIN = 1000;
-const int PWM_MAX = 2000;
-const int PWM_NEUTRAL = (PWM_MAX + PWM_MIN) / 2;
+// Motor Pins
+#define ENA 14  // D5 - Enable pin for Motor A (Right Side)
+#define IN1 4   // D2 - Motor A Input 1
+#define IN2 0   // D3 - Motor A Input 2
+#define ENB 5   // D1 - Enable pin for Motor B (Left Side)
+#define IN3 2   // D4 - Motor B Input 1
+#define IN4 12  // D6 - Motor B Input 2
 
 void setup() {
-    Wire.begin();
-    Serial.begin(115200);
+  Serial.begin(9600);  // Use Hardware Serial for HC-05
 
-    // Initialize MPU6050
-    mpu.initialize();
-    if (!mpu.testConnection()) {
-        Serial.println("MPU6050 connection failed");
-        while (1);
-    }
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  digitalWrite(ENA, HIGH);
+  digitalWrite(ENB, HIGH);
 
-    // Initialize PID controllers
-    roll_pid.SetMode(AUTOMATIC);
-    pitch_pid.SetMode(AUTOMATIC);
-    yaw_pid.SetMode(AUTOMATIC);
-
-    // Set PWM pins as outputs
-    pinMode(motor1Pin, OUTPUT);
-    pinMode(motor2Pin, OUTPUT);
-    pinMode(motor3Pin, OUTPUT);
-    pinMode(motor4Pin, OUTPUT);
+  stopMotors();  
+  Serial.println("Bluetooth Ready!");
 }
 
 void loop() {
-    // Read sensor data
-    int16_t ax, ay, az, gx, gy, gz;
-    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+  if (Serial.available()) {  // Check for Bluetooth data
+    char command = Serial.read();
+    Serial.print("Received: "); Serial.println(command);
 
-    // Convert gyro data to angular rates
-    roll_input = gx / 65.5;
-    pitch_input = gy / 65.5;
-    yaw_input = gz / 65.5;
-
-    // Compute PID outputs
-    roll_pid.Compute();
-    pitch_pid.Compute();
-    yaw_pid.Compute();
-
-    // Calculate motor PWM values
-    int motor1_pwm = constrain_pwm(PWM_NEUTRAL + roll_output + pitch_output + yaw_output);
-    int motor2_pwm = constrain_pwm(PWM_NEUTRAL - roll_output + pitch_output - yaw_output);
-    int motor3_pwm = constrain_pwm(PWM_NEUTRAL - roll_output - pitch_output + yaw_output);
-    int motor4_pwm = constrain_pwm(PWM_NEUTRAL + roll_output - pitch_output - yaw_output);
-
-    // Update motor PWM
-    analogWrite(motor1Pin, motor1_pwm);
-    analogWrite(motor2Pin, motor2_pwm);
-    analogWrite(motor3Pin, motor3_pwm);
-    analogWrite(motor4Pin, motor4_pwm);
-
-    // Print sensor data and PID output for debugging
-    Serial.print("Roll: "); Serial.print(roll_input);
-    Serial.print(" Pitch: "); Serial.print(pitch_input);
-    Serial.print(" Yaw: "); Serial.print(yaw_input);
-    Serial.print(" Roll Output: "); Serial.print(roll_output);
-    Serial.print(" Pitch Output: "); Serial.print(pitch_output);
-    Serial.print(" Yaw Output: "); Serial.println(yaw_output);
-
-    delay(10);  // Delay for sensor update interval
+    if (command == 'F') moveForward();
+    else if (command == 'B') moveBackward();
+    else if (command == 'L') turnLeft();
+    else if (command == 'R') turnRight();
+    else if (command == 'S') stopMotors();
+    else if (command == 'G') moveForwardLeft();
+    else if (command == 'I') moveForwardRight();
+    else if (command == 'H') moveBackwardLeft();
+    else if (command == 'J') moveBackwardRight();
+  }
 }
 
-int constrain_pwm(int pwm) {
-    if (pwm < PWM_MIN) return PWM_MIN;
-    if (pwm > PWM_MAX) return PWM_MAX;
-    return pwm;
+// 🚀 Basic Movements
+void moveForward() {
+  Serial.println("Moving Forward");
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void moveBackward() {
+  Serial.println("Moving Backward");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void turnLeft() {
+  Serial.println("Turning Left");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void turnRight() {
+  Serial.println("Turning Right");
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void stopMotors() {
+  Serial.println("Stopping Motors");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
+
+// 🚀 Diagonal Movements
+void moveForwardLeft() {
+  Serial.println("Moving Forward Left");
+  digitalWrite(IN1, LOW);  // Right motor stops
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH); // Left motor moves forward
+  digitalWrite(IN4, LOW);
+}
+
+void moveForwardRight() {
+  Serial.println("Moving Forward Right");
+  digitalWrite(IN1, HIGH); // Right motor moves forward
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);  // Left motor stops
+  digitalWrite(IN4, LOW);
+}
+
+void moveBackwardLeft() {
+  Serial.println("Moving Backward Left");
+  digitalWrite(IN1, LOW);  // Right motor stops
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH); // Left motor moves backward
+}
+
+void moveBackwardRight() {
+  Serial.println("Moving Backward Right");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH); // Right motor moves backward
+  digitalWrite(IN3, LOW);  // Left motor stops
+  digitalWrite(IN4, LOW);
 }
